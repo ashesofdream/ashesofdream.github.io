@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "6.5850_MapReduce"
+title:      "6.5840_MapReduce"
 subtitle:   ""
 date:       2024-01-21 01:30:00
 author:     "ashesofdream"
@@ -10,6 +10,16 @@ tags:
     - 6.5840
 ---
 
-OK ! Just a Test.
-
+简单的总结一下MapReduce吧。  
+MapReduce是一个用于分布式计算的算法框架，用户通过自定义Map操作和Reduce操作，以实现大规模的数据计算。  
+所谓Map操作，即将输入的内容转换成，Key及其对应Value的过程，以word count任务举例，Key则为word，Value则为Key的数量。在Reduce阶段，则是将相同具有相同key的项进行归并的一个过程。  
+在整个MapReduce系统中，包含了两类进程，Coordinator调度器和Worker工人，调度器一般只有一个，负责调度所有的Worker进行对应的任务。  
+了解以上概念后，那么就可以有个整体的MapReduce的实现思路了：  
+1. Map阶段，Coordinator将所有文件分割成N份，派发给N个Worker。
+2. 每个Woker接受到后，读取目标文件进行Map操作，然后对Map得到的键值对进行根据Key进行排序（相对于所有文件这是一个局部排序的过程），然后对一个单独的Key进行hash计算，然后根据其哈希值，分配到一个bucket中，即hash(key)%bucket_num，最后输出Map的结果到不同的文件中，命名为mr-MapIdx-BucketIdx。最后总共会生成 N * bucket_num个中间文件
+3. Reduce阶段，Coordinator将派发bucket_num个Reduce任务。
+4. Worker接受到后，将会读取所有名字为mr-*-BucketIdx中的文件，由于都在相同bucketIdx中，所有具有相同Key的键值对会聚集在一起，此时再度进行排序，然后就可以将所有具有相同key的键值对送进Reduce操作中了。最后每个Reduce操作输出最后的结果。  
+整个上算法的思路体现出了分治的思想，先是对输入文件分割成多个部分让不同的进程读取，然后是根据hash值，将不同的键值对分割到不同bucket中，实现了Map、Reduce的并行。  
+关于6.5840中的测试脚本，值得特别注意的有两个测试。一是early exit，这个主要是测试是否存在worker进程，在整个MapReduce程序结束之前进程就结束了，这将导致如果有Worker执行失败，而其它执行完Reduce操作的worker又提前退出了，这将导致整个程序进入死锁。二是crash，这个测试中，会保证有一个肯定不会crash的Worker，和其它几个不定期会crash的worker。这里我的实现思路是，在分发一个任务给worker后，同时启动一个计时器线程，如若超时未完成，则将任务重新派给其它worker。  
+总体上这个作业想写好，难度还是有的，一是不熟悉go，二是并行运行的任务debug相当麻烦。
 
